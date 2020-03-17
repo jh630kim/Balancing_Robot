@@ -480,7 +480,7 @@ class MPU6050:
 
                 if self.__debug:
                     print('Setting DLPF bandwidth to 42Hz')
-                self.set_DLF_mode(C.MPU6050_DLPF_BW_42)
+                self.set_DLF_mode(C.MPU6050_DLPF_BW_256)
 
                 if self.__debug:
                     print('Setting gyro sensitivity to +/- 2000 deg/sec')

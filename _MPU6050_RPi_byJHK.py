@@ -248,11 +248,11 @@ if __name__ == '__main__':
         AcX_deg, AcY_deg = cal_angle_acc(AcX, AcY, AcZ)
         past = cal_angle_gyro(GyX, GyY, GyZ)
 
-        # print("AcX_deg, AcY_deg = ", AcX_deg, ',', AcY_deg)
         time.sleep(0.01)
         cnt += 1
         if cnt%100 == 0:
             print("GyX,Y,Z_deg = ", GyX_deg, ',', GyY_deg, ',', GyZ_deg)
+            # print("AcX_deg, AcY_deg = ", AcX_deg, ',', AcY_deg)
 
 
 

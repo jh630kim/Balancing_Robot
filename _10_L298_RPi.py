@@ -92,6 +92,47 @@ def set_L298(ch, speed):
         set_L298_Control(pwm_L, IN3, IN4, speed)
 
 
+run = True     # 모터 구동 여부
+debug = False    # 디버그 메시지 출력 여부
+
+def motor_R(speed):
+    """
+    오른족 모터 구동
+    :param speed: 모터 속도(-PWM_FREQ(-100) ~ 0 ~ PWM_FREQ(100)), +: 전진, -: 후진, 0: 정지
+    """
+    if run == True:
+        set_L298(RIGHT, speed)
+
+def motor_L(speed):
+    """
+    왼쪽 모터 구동
+    :param speed:
+    :param speed: 모터 속도(-PWM_FREQ(-100) ~ 0 ~ PWM_FREQ(100)), +: 전진, -: 후진, 0: 정지
+    """
+    if run == True:
+        set_L298(LEFT, speed)
+
+
+def motor(speed):
+    """
+    앙쪽 모터 구동
+    :param speed: 모터 속도(-PWM_FREQ(-100) ~ 0 ~ PWM_FREQ(100)), +: 전진, -: 후진, 0: 정지
+    """
+    if run == True:
+        set_L298(RIGHT, speed)
+        set_L298(LEFT, speed)
+    if debug == True:
+        motor.count += 1
+        if (motor.speed != speed) or (motor.count >= 100):
+            motor.speed = speed
+            motor.count = 0
+            print("motor speed = ", speed)
+
+# 함수의 속성(Attribute)을 이용한 static 변수 구현
+motor.count = 0
+motor.speed = 0
+
+
 if __name__ == '__main__':
     ''' -----------------------------------'''
     ''' 모터 제어 테스트 '''
