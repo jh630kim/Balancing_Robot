@@ -9,6 +9,8 @@ https://blog.naver.com/chandong83/221084688966를 참조
 다만, wiringpi 이용을 RPi.GPIO를 이용하는 것으로 변경함
 RPi.GPIO는 "라즈베리파이3 직접 코딩하기(앤써북)"을 참조
 '''
+run = True     # 모터 구동 여부
+debug = False    # 디버그 메시지 출력 여부
 
 # Mungchi의 예비 포트: X, VCC(12V), GND, 26, 19, 13, 6, 5, 11, VCC(3V)
 # 실제 핀 정의
@@ -90,10 +92,6 @@ def set_L298(ch, speed):
         set_L298_Control(pwm_R, IN1, IN2, speed)
     else:
         set_L298_Control(pwm_L, IN3, IN4, speed)
-
-
-run = True     # 모터 구동 여부
-debug = False    # 디버그 메시지 출력 여부
 
 def motor_R(speed):
     """

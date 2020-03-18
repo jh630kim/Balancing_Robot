@@ -13,6 +13,7 @@ import _31_mpu6050 as mpu6050
 # import _41_LAN_Comm as rec
 # 단순히 파일로 기록하고 싶으면 이걸 이용
 import _41_FILE_record as rec
+from _51_AngleMeterAlpha import AngleMeterAlpha
 import math
 import time
 
@@ -46,14 +47,27 @@ print('sample_rate = ', sample_rate,
 # float ypr[3]; // [yaw, pitch, roll] yaw / pitch / roll container and gravity vector
 '''
 
+# Kalman Filter 초기화
+angle = AngleMeterAlpha()
+angle.measure()	# Thread를 돌려서 각도 계산
+
+# Kalman Filter 출력
+# angle.get_kalman_roll()  # X
+# angle.get_kalman_pitch() # Y
+
+# 상보 Filter 출력
+# angle.get_complementary_roll()
+# angle.get_complementary_pitch()
+
+
 ########################################
 # PID 초기화
 ########################################
 # todo: 로봇에 맞게 튜닝 필요
-setpoint = 4.5      # 로봇이 지면에서 평형을 유지하는 상태의 값
-Kp = 30             # P gain, 1단계 설정
+setpoint = 3.5       # 로봇이 지면에서 평형을 유지하는 상태의 값
+Kp = 10             # P gain, 1단계 설정
 Kd = 2              # D gain, 2단계 설정
-Ki = 5              # I gain, 3단계 설정
+Ki = 0              # I gain, 3단계 설정
 # 0, 25, 0, 5
 # 10, 25, 0, 5
 # 기타 설정값
@@ -93,11 +107,11 @@ STOP = 0
 # 전송 센서 정보
 channel = 9
 blk = ' '
-sensor_name = ["ROLL(X)", "PITCH(Y)", "YAW(Z)",
-               "ACC(X)", "ACC(Y)", "ACC(Z)",
-               "DEG", "SPEED", "GYRO(Z)"]
-sensor_min = [-180, -180, -180, -30000, -30000, -30000, -180, -100, -30000]
-sensor_max = [ 180,  180,  180,  30000,  30000,  30000,  180,  100,  30000]
+sensor_name = ["-Kalman_Y", "-Comp_Y", "Accel_Y", "DMP_Y",
+               "-Kalman_X", "-Comp_X", "Accel_X", "DMP_X",
+               "MOTOR"]
+sensor_min = [-180, -180, -180, -180, -180, -180, -180, -100, -180]
+sensor_max = [ 180,  180,  180,  180,  180,  180,  180,  100,  180]
 
 # Clinet 초기화
 rec.initialize(channel, sensor_name, sensor_min, sensor_max)
@@ -137,10 +151,10 @@ while True:
     gravity = mpu.dmpGetGravity(quaternion)
     ypr = mpu.dmpGetYawPitchRoll(quaternion, gravity)
 
-    # "FIFO buffer"에서 읽은 각도
-    current_roll = ypr['roll'] * 180 / math.pi
-    current_pitch = ypr['pitch'] * 180 / math.pi
-    current_yaw = ypr['yaw'] * 180 / math.pi
+    # DMP를 이용해 계산한 각도
+    DMP_roll = ypr['roll'] * 180 / math.pi
+    DMP_pitch = ypr['pitch'] * 180 / math.pi
+    DMP_yaw = ypr['yaw'] * 180 / math.pi
     
     # "현재" accel(가속도)와 gyro(각속도) 읽기
     # [0]: X, [1]: Y, [2]: Z
@@ -158,15 +172,16 @@ while True:
     x_degree = x_radians * 180 / math.pi
 
     # 최종 입력값(전/후 기울기)
-    current_angle = current_pitch
+    # current_angle = DMP_pitch
     # current_angle = y_degree
+    current_angle = -angle.get_kalman_pitch()
 
     # PID 제어
     # current_angle = 현재 Y 각도(pitch)
     # motor_speed: 모터의 전/후진
     motor_speed = pid(current_angle)
     L298.motor(motor_speed)   # 그런데... 힘이 약한 것 같다. 출력이 선형이 아닌것도 같고...
-    # print('{0:5.2f}, {0:5.2f}'.format(current_pitch, y_degree))
+    # print('{0:5.2f}, {0:5.2f}'.format(DMP_pitch, y_degree))
     
     # scipia의 코딩 방식
     '''
@@ -177,14 +192,14 @@ while True:
     else:
         L298.motor(STOP)
     '''
-	# 메시지 생성
-    data.append(value.format(current_roll, current_pitch, current_yaw,
-                             current_accel[0], current_accel[1], current_accel[2],
-                             current_pitch, y_degree, motor_speed))
+    # 메시지 생성
+    data.append(value.format(-angle.get_kalman_pitch(), -angle.get_complementary_pitch(), y_degree, DMP_pitch,
+                             -angle.get_kalman_roll(), -angle.get_complementary_roll(), x_degree, DMP_roll,
+                             motor_speed))
 
     count += 1
 
-	# 100개 메시지가 쌓이면, 그래프를 그리기 위해 전송
+    # 100개 메시지가 쌓이면, 그래프를 그리기 위해 전송
     if count >= 100:
         new = time.time()
 
