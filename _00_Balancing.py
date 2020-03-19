@@ -8,14 +8,15 @@
 """
 
 import _10_L298_RPi as L298
-import _31_mpu6050 as mpu6050
+from _21_MPU_Thread import Angle_MPU6050
 # Sensor_Visualizer_v2를 이용해 Display하고 싶으면 이걸 이용
 # import _41_LAN_Comm as rec
 # 단순히 파일로 기록하고 싶으면 이걸 이용
 import _41_FILE_record as rec
-from _51_AngleMeterAlpha import AngleMeterAlpha
+
 import math
 import time
+import sys
 
 from simple_pid import PID
 
@@ -24,41 +25,8 @@ from simple_pid import PID
 # MOU-6050 초기화
 ########################################
 # Sensor initialization
-mpu = mpu6050.MPU6050()
-mpu.dmpInitialize()
-mpu.setDMPEnabled(True)
-
-# get expected DMP packet size for later comparison
-packetSize = mpu.dmpGetFIFOPacketSize()
-
-# DMP 설정 확인
-sample_rate = mpu.getRate()
-dlp_mode = mpu.getDLPFMode()
-gyro_fs = mpu.getFullScaleGyroRange()
-accel_fs = mpu.getFullScaleAccelRange()
-print('sample_rate = ', sample_rate,
-      ', dlp_mode = ', dlp_mode,
-      ', gyro_fs = ', gyro_fs,
-      ', accel_fs = ', accel_fs)
-
-'''
-# Quaternion q; // [w, x, y, z] quaternion container 
-# VectorFloat gravity; // [x, y, z] gravity vector
-# float ypr[3]; // [yaw, pitch, roll] yaw / pitch / roll container and gravity vector
-'''
-
-# Kalman Filter 초기화
-angle = AngleMeterAlpha()
-angle.measure()	# Thread를 돌려서 각도 계산
-
-# Kalman Filter 출력
-# angle.get_kalman_roll()  # X
-# angle.get_kalman_pitch() # Y
-
-# 상보 Filter 출력
-# angle.get_complementary_roll()
-# angle.get_complementary_pitch()
-
+mpu6050 = Angle_MPU6050()
+mpu6050.start_measure_thread()
 
 ########################################
 # PID 초기화
@@ -66,8 +34,17 @@ angle.measure()	# Thread를 돌려서 각도 계산
 # todo: 로봇에 맞게 튜닝 필요
 setpoint = 3.5       # 로봇이 지면에서 평형을 유지하는 상태의 값
 Kp = 10             # P gain, 1단계 설정
-Kd = 2              # D gain, 2단계 설정
+Kd = 0              # D gain, 2단계 설정
 Ki = 0              # I gain, 3단계 설정
+
+try:
+    Kp = float(sys.argv[1])
+    Ki = float(sys.argv[2])
+    Kd = float(sys.argv[3])
+except IndexError:
+    pass
+
+print("Kp = {}, Ki = {}, Kd = {}".format(Kp, Ki, Kd))
 # 0, 25, 0, 5
 # 10, 25, 0, 5
 # 기타 설정값
@@ -105,21 +82,27 @@ STOP = 0
 # Client Socket 초기화
 ########################################
 # 전송 센서 정보
-channel = 9
-blk = ' '
-sensor_name = ["-Kalman_Y", "-Comp_Y", "Accel_Y", "DMP_Y",
-               "-Kalman_X", "-Comp_X", "Accel_X", "DMP_X",
+sensor_name = ["Kalman_Y", "Comp_Y", "Accel_Y", "DMP_Y",
+               "Kalman_X", "Comp_X", "Accel_X", "DMP_X",
+               "Gyro_X", "Gyro_Y", "Gyro_Z",
                "MOTOR"]
-sensor_min = [-180, -180, -180, -180, -180, -180, -180, -100, -180]
-sensor_max = [ 180,  180,  180,  180,  180,  180,  180,  100,  180]
 
-# Clinet 초기화
-rec.initialize(channel, sensor_name, sensor_min, sensor_max)
+channel = len(sensor_name)
 
 # Data 메시지 준비
 msg = 'value'
 data = []
-value = '{} {} {} {} {} {} {} {} {}'
+value = ''
+sensor_min = []
+sensor_max = []
+
+for i in range(channel):
+    value += '{} '
+    sensor_min.append(-180)
+    sensor_max.append(180)
+
+# Clinet 초기화
+rec.initialize(channel, sensor_name, sensor_min, sensor_max)
 
 ########################################
 # 제어 루프 시작
@@ -130,51 +113,21 @@ past = time.time()  # 현재 시간(Loop time 확인용)
 
 while True:
     # 읽을 센서값이 있는지 확인(Int Status와 fifo count를 확인)
-    mpuIntStatus = mpu.getIntStatus()
-    fifoCount = mpu.getFIFOCount()
+    accel_roll = mpu6050.get_accel_roll()
+    accel_pitch = mpu6050.get_accel_pitch()
+    gyro_roll = mpu6050.get_gyro_roll()
+    gyro_pitch = mpu6050.get_gyro_pitch()
+    gyro_yaw = mpu6050.get_gyro_yaw()
+    compl_roll = mpu6050.get_complementary_roll()
+    compl_pitch = mpu6050.get_complementary_pitch()
+    kalman_roll = mpu6050.get_kalman_roll()
+    kalman_pitch = mpu6050.get_kalman_pitch()
+    DMP_roll = mpu6050.get_DMP_roll()
+    DMP_pitch = mpu6050.get_DMP_pitch()
+    DMP_yaw = mpu6050.get_DMP_yaw()
 
-    # Overflow 확인
-    # this should never happen unless our code is too inefficient
-    if (fifoCount == 1024) or (mpuIntStatus & 0x10):
-        # reset so we can continue cleanly
-        mpu.resetFIFO()
-        print('FIFO overflow!', fifoCount, hex(mpuIntStatus))
-
-    # 읽을 데이터가 있을 때 까지 대기
-    fifoCount = mpu.getFIFOCount()
-    while fifoCount < packetSize:
-        fifoCount = mpu.getFIFOCount()
-
-    # 수신 데이터가 있는 경우
-    result = mpu.getFIFOBytes(packetSize)
-    quaternion = mpu.dmpGetQuaternion(result)
-    gravity = mpu.dmpGetGravity(quaternion)
-    ypr = mpu.dmpGetYawPitchRoll(quaternion, gravity)
-
-    # DMP를 이용해 계산한 각도
-    DMP_roll = ypr['roll'] * 180 / math.pi
-    DMP_pitch = ypr['pitch'] * 180 / math.pi
-    DMP_yaw = ypr['yaw'] * 180 / math.pi
-    
-    # "현재" accel(가속도)와 gyro(각속도) 읽기
-    # [0]: X, [1]: Y, [2]: Z
-    current_accel = mpu.getAcceleration()
-    current_gyro = mpu.getRotation()
-    
-    AcX = current_accel[0]
-    AcY = current_accel[1]
-    AcZ = current_accel[2]
-    
-    y_radians = math.atan2(AcX, math.sqrt((AcY*AcY) + (AcZ*AcZ)))
-    x_radians = math.atan2(AcY, math.sqrt((AcX*AcX) + (AcZ*AcZ)))
-    
-    y_degree = y_radians * 180 / math.pi
-    x_degree = x_radians * 180 / math.pi
-
-    # 최종 입력값(전/후 기울기)
-    # current_angle = DMP_pitch
-    # current_angle = y_degree
-    current_angle = -angle.get_kalman_pitch()
+    # current_angle = kalman_pitch
+    current_angle = DMP_pitch
 
     # PID 제어
     # current_angle = 현재 Y 각도(pitch)
@@ -192,12 +145,15 @@ while True:
     else:
         L298.motor(STOP)
     '''
+
     # 메시지 생성
-    data.append(value.format(-angle.get_kalman_pitch(), -angle.get_complementary_pitch(), y_degree, DMP_pitch,
-                             -angle.get_kalman_roll(), -angle.get_complementary_roll(), x_degree, DMP_roll,
+    data.append(value.format(kalman_pitch, compl_pitch, accel_pitch, DMP_pitch,
+                             kalman_roll, compl_roll, accel_roll, DMP_roll,
+                             gyro_roll, gyro_pitch, gyro_yaw,
                              motor_speed))
 
     count += 1
+    time.sleep(0.01)
 
     # 100개 메시지가 쌓이면, 그래프를 그리기 위해 전송
     if count >= 100:

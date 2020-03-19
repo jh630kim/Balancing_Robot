@@ -158,11 +158,30 @@ class PyComms:
     def readS16(self, reg):
         # Reads a signed 16-bit value from the I2C device
         try:
+            # todo: DMP와 Kalman이 같은지 확인!!!
+            # DMP의 계산
             hibyte = self.bus.read_byte_data(self.address, reg)
             if hibyte > 127:
                 hibyte -= 256
             result = (hibyte << 8) + self.bus.read_byte_data(self.address, reg + 1)
+
+            # Kalman의 계산
+            # Accelero and Gyro value are 16-bit
+            high = self.bus.read_byte_data(self.address, reg)
+            low = self.bus.read_byte_data(self.address, reg + 1)
+
+            # concatenate higher and lower value
+            value = ((high << 8) | low)
+
+            # to get signed value from mpu6050
+            if (value > 32768):
+                value = value - 65536
+
+            if result != value:
+                print("Read Signed 16bit Data Error!!! in _31_pycomms.py")
+
             return result
+
         except (IOError):
             print ("Error accessing 0x%02X: Check your I2C address" % self.address)
             return -1
