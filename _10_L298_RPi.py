@@ -9,7 +9,6 @@ https://blog.naver.com/chandong83/221084688966를 참조
 다만, wiringpi 이용을 RPi.GPIO를 이용하는 것으로 변경함
 RPi.GPIO는 "라즈베리파이3 직접 코딩하기(앤써북)"을 참조
 '''
-run = True     # 모터 구동 여부
 
 # Mungchi의 예비 포트: X, VCC(12V), GND, 26, 19, 13, 6, 5, 11, VCC(3V)
 # 실제 핀 정의
@@ -61,24 +60,23 @@ def set_L298_pinconfig(EN, INA, INB):
 
 def set_L298_Control(PWM, INA, INB, speed):
     """ 모터 제어 함수 """
-    if run == True:
-        # 앞으로
-        if speed > 0:
-            PWM.ChangeDutyCycle(speed)
-            GPIO.output(INA, GPIO.LOW)
-            GPIO.output(INB, GPIO.HIGH)
+    # 앞으로
+    if speed > 0:
+        PWM.ChangeDutyCycle(speed)
+        GPIO.output(INA, GPIO.LOW)
+        GPIO.output(INB, GPIO.HIGH)
 
-        # 뒤로
-        elif speed < 0:
-            PWM.ChangeDutyCycle(-speed)
-            GPIO.output(INA, GPIO.HIGH)
-            GPIO.output(INB, GPIO.LOW)
+    # 뒤로
+    elif speed < 0:
+        PWM.ChangeDutyCycle(-speed)
+        GPIO.output(INA, GPIO.HIGH)
+        GPIO.output(INB, GPIO.LOW)
 
-        # 정지
-        elif speed == 0:
-            PWM.ChangeDutyCycle(0)
-            GPIO.output(INA, GPIO.LOW)
-            GPIO.output(INB, GPIO.LOW)
+    # 정지
+    elif speed == 0:
+        PWM.ChangeDutyCycle(0)
+        GPIO.output(INA, GPIO.LOW)
+        GPIO.output(INB, GPIO.LOW)
 
 
 def set_L298(ch, speed):

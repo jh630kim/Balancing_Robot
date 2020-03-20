@@ -290,12 +290,6 @@ class Angle_MPU6050:
     def get_kalman_roll(self):
         # by JHK: DMP, accel과 맞추기 위해 조정
         # return self.kalman_roll
-        '''
-        self.kalman_roll = -self.kalman_roll
-        if self.kalman_roll < 0:
-            self.kalman_roll += 360
-        self.kalman_roll -= 180
-        '''
         return -self.kalman_roll
 
     def get_kalman_pitch(self):

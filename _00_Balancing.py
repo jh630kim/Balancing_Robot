@@ -17,48 +17,63 @@ import _41_FILE_record as rec
 import math
 import time
 import sys
+import datetime
 
 from simple_pid import PID
 
 
 ########################################
-# MOU-6050 초기화
-########################################
-# Sensor initialization
-mpu6050 = Angle_MPU6050()
-mpu6050.start_measure_thread()
-
-########################################
 # PID 초기화
 ########################################
 # todo: 로봇에 맞게 튜닝 필요
-setpoint = 3.5       # 로봇이 지면에서 평형을 유지하는 상태의 값
-Kp = 25             # P gain, 1단계 설정
-Ki = 3              # I gain, 3단계 설정
-Kd = 0.5              # D gain, 2단계 설정
-run = 1
+# Config파일에서 PID 설정값 읽기
+file = open("_01_config.py", 'r')
+setpoint = float(file.readline().split("#")[0])       # 로봇이 지면에서 평형을 유지하는 상태의 값
+Kp = float(file.readline().split("#")[0])             # P gain, 1단계 설정
+Ki = float(file.readline().split("#")[0])            # I gain, 3단계 설정
+Kd = float(file.readline().split("#")[0])            # D gain, 2단계 설정
+run = int(file.readline().split("#")[0])            # 모터 구동 여부
+logging = int(file.readline().split("#")[0])        # data logging 여부
+file.close()
 
-
+# 파일 실행 인자로 설정값 받기
 try:
-    setpoint = float(sys.argv[1])
-    Kp = float(sys.argv[2])
-    Ki = float(sys.argv[3])
-    Kd = float(sys.argv[4])
-    run = float(sys.argv[5])
+    if sys.argv[1] != 'r':
+        setpoint = float(sys.argv[1])
+except IndexError:
+    print("Set (1)setpoint, (1)Kp, (3)Ki, (4)Kd, (5)motor_run[1], (6)logging[0] status!")
+    print("('-' for not changing)")
+    print("Or, Use [_00_Balancing.py r] for defalut setting")
+    exit()
+
+# 인자로 - 를 받으면 default값 이용
+try:
+    if sys.argv[2] != '-':
+        Kp = float(sys.argv[2])
+    if sys.argv[3] != '-':
+        Ki = float(sys.argv[3])
+    if sys.argv[4] != '-':
+        Kd = float(sys.argv[4])
+    if sys.argv[5] != '-':
+        run = int(sys.argv[5])
+    if sys.argv[6] != '-':
+        logging = int(sys.argv[6])
 except IndexError:
     pass
 
-print("Kp = {}, Ki = {}, Kd = {}".format(Kp, Ki, Kd))
-# 0, 25, 0, 5
-# 10, 25, 0, 5
+# Config파일에 PID 설정값 쓰기
+file = open("_01_config.py", 'w')
+file.write("{}      # set_point\n".format(setpoint))
+file.write("{}      # P gain\n".format(Kp))
+file.write("{}      # I gain\n".format(Ki))
+file.write("{}      # D gain\n".format(Kd))
+file.write("{}      # motor on = 1, off = 0\n".format(run))
+file.write("{}      # data logging on `= 1, off = 0\n".format(logging))
+file.close()
+
 # 기타 설정값
-sample_time = 0.05  # 주기: 0.05 sec
-    # 제어 주기를 10ms로 하고, sensor 주기를 200Hz로 하면
-    # 현재 python 성능 상 한번 roop를 도는 데 0.033sec가 걸린다
-    # 그리고, 계속 FIFO overflow가 난다.
-    # 즉, 그만한 성능을 내지 못하는거다.
-    # 따라서, 제어 주기를 50ms로 변경하고, sensor 주기는 125Hz로 변경
-output_limits = (-95, 95)   # 출력 제한: -50 ~ 50
+sample_time = 0.01  # 주기: 0.05 sec
+output_limits = (-100, 100)   # 출력 제한: -100 ~ 100
 auto_mode = True    # PID control ON(True), Off(False)
 p_ON_M = False      # 뭐지?
 
@@ -73,64 +88,75 @@ pid = PID(Kp=Kp, Ki=Ki, Kd=Kd,
 # pid.setpoint = 10
 # pid.tunings = (1.0, 0,2, 0.4) or pid.Kp = 1.0
 
+# PID 설정값 Logging
+dt = datetime.datetime.now()
+dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, dt.microsecond
+
+file_name = './_01_run_setting_log.txt'
+file=open(file_name, 'a')
+file.write('{}/{} {}:{} {} {} {} {} {}\n'.format(
+    dt.month, dt.day, dt.hour, dt.minute, setpoint, Kp, Ki, Kd, sample_time))
+file.close()
+
+########################################
+# MOU-6050 초기화
+########################################
+# Sensor initialization
+mpu6050 = Angle_MPU6050()
+mpu6050.start_measure_thread()
+
 ########################################
 # L298(모터) 초기화
 ########################################
 L298.GPIO_init()
 
-FORWARD = 95
-BACKWARD = -95
-STOP = 0
-
 ########################################
 # Client Socket 초기화
 ########################################
 # 전송 센서 정보
-sensor_name = ["Kalman_Y", "Comp_Y", "Accel_Y", "DMP_Y",
-               "Kalman_X", "Comp_X", "Accel_X", "DMP_X",
-               "Gyro_X", "Gyro_Y", "Gyro_Z",
-               "MOTOR"]
+if logging == 1:
+    sensor_name = ["Kalman_Y", "DMP_Z", "Gyro_Z", "MOTOR"]
 
-channel = len(sensor_name)
+    channel = len(sensor_name)
 
-# Data 메시지 준비
-msg = 'value'
-data = []
-value = ''
-sensor_min = []
-sensor_max = []
+    # Data 메시지 준비
+    msg = 'value'
+    data = []
+    value = ''
+    sensor_min = []
+    sensor_max = []
 
-for i in range(channel):
-    value += '{} '
-    sensor_min.append(-180)
-    sensor_max.append(180)
+    for i in range(channel):
+        value += '{} '
+        sensor_min.append(-180)
+        sensor_max.append(180)
 
-# Clinet 초기화
-rec.initialize(channel, sensor_name, sensor_min, sensor_max)
+    # Clinet 초기화
+    rec.initialize(channel, sensor_name, sensor_min, sensor_max)
 
 ########################################
 # 제어 루프 시작
 ########################################
+print("Kp = {}, Ki = {}, Kd = {}".format(Kp, Ki, Kd))
+
+'''
+for i in range(3, 0, -1):
+    print(i, "!")
+    time.sleep(1)
+
+print("Start!!!")
+'''
 # 초기값 설정
 count = 0           # display 주기
 past = time.time()  # 현재 시간(Loop time 확인용)
 
 while True:
-    # 읽을 센서값이 있는지 확인(Int Status와 fifo count를 확인)
-    accel_roll = mpu6050.get_accel_roll()
-    accel_pitch = mpu6050.get_accel_pitch()
-    gyro_roll = mpu6050.get_gyro_roll()
-    gyro_pitch = mpu6050.get_gyro_pitch()
+    # 센서 읽기
     gyro_yaw = mpu6050.get_gyro_yaw()
-    compl_roll = mpu6050.get_complementary_roll()
-    compl_pitch = mpu6050.get_complementary_pitch()
-    kalman_roll = mpu6050.get_kalman_roll()
     kalman_pitch = mpu6050.get_kalman_pitch()
-    DMP_roll = mpu6050.get_DMP_roll()
-    DMP_pitch = mpu6050.get_DMP_pitch()
     DMP_yaw = mpu6050.get_DMP_yaw()
 
-    # current_angle = kalman_pitch
+    # 현재 각도
     current_angle = kalman_pitch
 
     # PID 제어
@@ -138,28 +164,29 @@ while True:
     # motor_speed: 모터의 전/후진
     motor_speed = pid(current_angle)
     if run == 1:
+        # todo: 모터 출력이 선형적인지 확인
+        #       스텝모터면 편한데... 다른 프로젝트에서는 Encoder로 회전수를 확인하기도 했다.
         L298.motor(motor_speed)   # 그런데... 힘이 약한 것 같다. 출력이 선형이 아닌것도 같고...
-    # print('{0:5.2f}, {0:5.2f}'.format(DMP_pitch, y_degree))
-    
-    # scipia의 코딩 방식
-    '''
-    if motor_speed > 0:
-        L298.motor(FORWARD)
-    elif motor_speed < 0:
-        L298.motor(BACKWARD)
-    else:
-        L298.motor(STOP)
-    '''
-    # 메시지 생성
-    data.append(value.format(kalman_pitch, compl_pitch, accel_pitch, DMP_pitch,
-                             kalman_roll, compl_roll, accel_roll, DMP_roll,
-                             gyro_roll, gyro_pitch, gyro_yaw,
-                             motor_speed))
+
+        # scipia의 모터 제어 방식
+        '''
+        if motor_speed > 0:
+            L298.motor(FORWARD)
+        elif motor_speed < 0:
+            L298.motor(BACKWARD)
+        else:
+            L298.motor(STOP)
+        '''
+
+    # 메시지 생성 for logging
+    data.append(value.format(kalman_pitch, DMP_yaw, gyro_yaw, motor_speed))
 
     count += 1
-    time.sleep(0.01)
+    # todo: PID에서 Sampling Rate에 따라 기다리는지 확인
+    #       현재 Sampling Rate는 0.01임
+    # time.sleep(0.01)
 
-    # 100개 메시지가 쌓이면, 그래프를 그리기 위해 전송
+    # 100개 메시지가 쌓이면, 그래프를 그리기 위해 전송(또는 Logging)
     if count >= 100:
         new = time.time()
 
@@ -167,11 +194,8 @@ while True:
         
         print("Elapsed time(100) =", new - past)
         past = new
-        # print('in: %5.5f, out: %+4.2f, current_accel[2]: %f, current_gyro[2]: %f' %
-        #       (current_angle, motor_speed, current_accel[2], current_gyro[2]))
-        # print(msg)
+
         # 메시지 전송 후 초기화
-        msg = 'value'
         data = []
         count = 0
 
