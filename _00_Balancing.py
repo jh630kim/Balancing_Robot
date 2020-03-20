@@ -33,14 +33,18 @@ mpu6050.start_measure_thread()
 ########################################
 # todo: 로봇에 맞게 튜닝 필요
 setpoint = 3.5       # 로봇이 지면에서 평형을 유지하는 상태의 값
-Kp = 10             # P gain, 1단계 설정
-Kd = 0              # D gain, 2단계 설정
-Ki = 0              # I gain, 3단계 설정
+Kp = 25             # P gain, 1단계 설정
+Ki = 3              # I gain, 3단계 설정
+Kd = 0.5              # D gain, 2단계 설정
+run = 1
+
 
 try:
-    Kp = float(sys.argv[1])
-    Ki = float(sys.argv[2])
-    Kd = float(sys.argv[3])
+    setpoint = float(sys.argv[1])
+    Kp = float(sys.argv[2])
+    Ki = float(sys.argv[3])
+    Kd = float(sys.argv[4])
+    run = float(sys.argv[5])
 except IndexError:
     pass
 
@@ -127,13 +131,14 @@ while True:
     DMP_yaw = mpu6050.get_DMP_yaw()
 
     # current_angle = kalman_pitch
-    current_angle = DMP_pitch
+    current_angle = kalman_pitch
 
     # PID 제어
     # current_angle = 현재 Y 각도(pitch)
     # motor_speed: 모터의 전/후진
     motor_speed = pid(current_angle)
-    L298.motor(motor_speed)   # 그런데... 힘이 약한 것 같다. 출력이 선형이 아닌것도 같고...
+    if run == 1:
+        L298.motor(motor_speed)   # 그런데... 힘이 약한 것 같다. 출력이 선형이 아닌것도 같고...
     # print('{0:5.2f}, {0:5.2f}'.format(DMP_pitch, y_degree))
     
     # scipia의 코딩 방식
@@ -145,7 +150,6 @@ while True:
     else:
         L298.motor(STOP)
     '''
-
     # 메시지 생성
     data.append(value.format(kalman_pitch, compl_pitch, accel_pitch, DMP_pitch,
                              kalman_roll, compl_roll, accel_roll, DMP_roll,
