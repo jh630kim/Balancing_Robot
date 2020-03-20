@@ -9,7 +9,7 @@
 # SCL - SCL (5 - Board)
 # SDA - SDA (3 - Board)
 
-from _51_Kalman import KalmanAngle
+from _21_Kalman import KalmanAngle
 import smbus  # import SMBus module of I2C
 import time
 import math

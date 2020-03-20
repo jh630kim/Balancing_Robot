@@ -10,7 +10,6 @@ https://blog.naver.com/chandong83/221084688966를 참조
 RPi.GPIO는 "라즈베리파이3 직접 코딩하기(앤써북)"을 참조
 '''
 run = True     # 모터 구동 여부
-debug = False    # 디버그 메시지 출력 여부
 
 # Mungchi의 예비 포트: X, VCC(12V), GND, 26, 19, 13, 6, 5, 11, VCC(3V)
 # 실제 핀 정의
@@ -62,23 +61,24 @@ def set_L298_pinconfig(EN, INA, INB):
 
 def set_L298_Control(PWM, INA, INB, speed):
     """ 모터 제어 함수 """
-    # 앞으로
-    if speed > 0:
-        PWM.ChangeDutyCycle(speed)
-        GPIO.output(INA, GPIO.LOW)
-        GPIO.output(INB, GPIO.HIGH)
+    if run == True:
+        # 앞으로
+        if speed > 0:
+            PWM.ChangeDutyCycle(speed)
+            GPIO.output(INA, GPIO.LOW)
+            GPIO.output(INB, GPIO.HIGH)
 
-    # 뒤로
-    elif speed < 0:
-        PWM.ChangeDutyCycle(-speed)
-        GPIO.output(INA, GPIO.HIGH)
-        GPIO.output(INB, GPIO.LOW)
+        # 뒤로
+        elif speed < 0:
+            PWM.ChangeDutyCycle(-speed)
+            GPIO.output(INA, GPIO.HIGH)
+            GPIO.output(INB, GPIO.LOW)
 
-    # 정지
-    elif speed == 0:
-        PWM.ChangeDutyCycle(0)
-        GPIO.output(INA, GPIO.LOW)
-        GPIO.output(INB, GPIO.LOW)
+        # 정지
+        elif speed == 0:
+            PWM.ChangeDutyCycle(0)
+            GPIO.output(INA, GPIO.LOW)
+            GPIO.output(INB, GPIO.LOW)
 
 
 def set_L298(ch, speed):
@@ -93,13 +93,13 @@ def set_L298(ch, speed):
     else:
         set_L298_Control(pwm_L, IN3, IN4, speed)
 
+
 def motor_R(speed):
     """
     오른족 모터 구동
     :param speed: 모터 속도(-PWM_FREQ(-100) ~ 0 ~ PWM_FREQ(100)), +: 전진, -: 후진, 0: 정지
     """
-    if run == True:
-        set_L298(RIGHT, speed)
+    set_L298(RIGHT, speed)
 
 def motor_L(speed):
     """
@@ -107,8 +107,7 @@ def motor_L(speed):
     :param speed:
     :param speed: 모터 속도(-PWM_FREQ(-100) ~ 0 ~ PWM_FREQ(100)), +: 전진, -: 후진, 0: 정지
     """
-    if run == True:
-        set_L298(LEFT, speed)
+    set_L298(LEFT, speed)
 
 
 def motor(speed):
@@ -116,19 +115,8 @@ def motor(speed):
     앙쪽 모터 구동
     :param speed: 모터 속도(-PWM_FREQ(-100) ~ 0 ~ PWM_FREQ(100)), +: 전진, -: 후진, 0: 정지
     """
-    if run == True:
-        set_L298(RIGHT, speed)
-        set_L298(LEFT, speed)
-    if debug == True:
-        motor.count += 1
-        if (motor.speed != speed) or (motor.count >= 100):
-            motor.speed = speed
-            motor.count = 0
-            print("motor speed = ", speed)
-
-# 함수의 속성(Attribute)을 이용한 static 변수 구현
-motor.count = 0
-motor.speed = 0
+    set_L298(RIGHT, speed)
+    set_L298(LEFT, speed)
 
 
 if __name__ == '__main__':
