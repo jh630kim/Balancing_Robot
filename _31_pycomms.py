@@ -160,15 +160,19 @@ class PyComms:
         try:
             # todo: DMP와 Kalman이 같은지 확인!!!
             # DMP의 계산
-            hibyte = self.bus.read_byte_data(self.address, reg)
+            high = self.bus.read_byte_data(self.address, reg)
+            low = self.bus.read_byte_data(self.address, reg + 1)
+            # hibyte = self.bus.read_byte_data(self.address, reg)
+            hibyte = high
             if hibyte > 127:
                 hibyte -= 256
-            result = (hibyte << 8) + self.bus.read_byte_data(self.address, reg + 1)
+            # result = (hibyte << 8) + self.bus.read_byte_data(self.address, reg + 1)
+            result = (hibyte << 8) + low
 
             # Kalman의 계산
             # Accelero and Gyro value are 16-bit
-            high = self.bus.read_byte_data(self.address, reg)
-            low = self.bus.read_byte_data(self.address, reg + 1)
+            # high = self.bus.read_byte_data(self.address, reg)
+            # low = self.bus.read_byte_data(self.address, reg + 1)
 
             # concatenate higher and lower value
             value = ((high << 8) | low)

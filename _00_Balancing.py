@@ -72,7 +72,7 @@ file.write("{}      # data logging on `= 1, off = 0\n".format(logging))
 file.close()
 
 # 기타 설정값
-sample_time = 0.01  # 주기: 0.05 sec
+sample_time = 0.05  # 주기: 0.05 sec
 output_limits = (-100, 100)   # 출력 제한: -100 ~ 100
 auto_mode = True    # PID control ON(True), Off(False)
 p_ON_M = False      # 뭐지?
