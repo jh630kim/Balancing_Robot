@@ -38,7 +38,7 @@ file.close()
 
 # 파일 실행 인자로 설정값 받기
 try:
-    if sys.argv[1] != 'r':
+    if sys.argv[1] != '-':
         setpoint = float(sys.argv[1])
 except IndexError:
     print("Set (1)setpoint, (1)Kp, (3)Ki, (4)Kd, (5)motor_run[1], (6)logging[0] status!")
@@ -72,8 +72,8 @@ file.write("{}      # data logging on `= 1, off = 0\n".format(logging))
 file.close()
 
 # 기타 설정값
-sample_time = 0.05  # 주기: 0.05 sec
-output_limits = (-100, 100)   # 출력 제한: -100 ~ 100
+sample_time = 0.01  # 주기: 0.05 sec
+output_limits = (-99, 99)   # 출력 제한: -100 ~ 100
 auto_mode = True    # PID control ON(True), Off(False)
 p_ON_M = False      # 뭐지?
 
@@ -115,8 +115,8 @@ L298.GPIO_init()
 ########################################
 # 전송 센서 정보
 if logging == 1:
-    sensor_name = ["Kalman_Y", "DMP_Z", "Gyro_Z", "MOTOR"]
-
+    sensor_name = ["Kalman_Y", "Kalman_Y(Inv)", "DMP_Y", "ACCEL_Y", "Y",
+                   "Gyro_yaw", "DMP_Y", "MOTOR"]
     channel = len(sensor_name)
 
     # Data 메시지 준비
@@ -139,21 +139,25 @@ if logging == 1:
 ########################################
 print("Kp = {}, Ki = {}, Kd = {}".format(Kp, Ki, Kd))
 
-'''
 for i in range(3, 0, -1):
     print(i, "!")
     time.sleep(1)
 
 print("Start!!!")
-'''
+
 # 초기값 설정
 count = 0           # display 주기
 past = time.time()  # 현재 시간(Loop time 확인용)
 
 while True:
     # 센서 읽기
-    gyro_yaw = mpu6050.get_gyro_yaw()
     kalman_pitch = mpu6050.get_kalman_pitch()
+    Comp_pitch = mpu6050.get_complementary_pitch()
+    DMP_pitch = mpu6050.get_DMP_pitch()
+    accel_pitch = mpu6050.get_accel_pitch()
+    gyro_pitch = mpu6050.get_gyro_pitch()
+
+    gyro_yaw = mpu6050.get_gyro_yaw()
     DMP_yaw = mpu6050.get_DMP_yaw()
 
     # 현재 각도
@@ -178,26 +182,29 @@ while True:
             L298.motor(STOP)
         '''
 
-    # 메시지 생성 for logging
-    data.append(value.format(kalman_pitch, DMP_yaw, gyro_yaw, motor_speed))
-
     count += 1
-    # todo: PID에서 Sampling Rate에 따라 기다리는지 확인
-    #       현재 Sampling Rate는 0.01임
-    # time.sleep(0.01)
 
-    # 100개 메시지가 쌓이면, 그래프를 그리기 위해 전송(또는 Logging)
-    if count >= 100:
-        new = time.time()
+    if logging == 1:
+        # 메시지 생성 for logging
+        data.append(value.format(kalman_pitch, -kalman_pitch, DMP_pitch, accel_pitch, gyro_pitch,
+                                 gyro_yaw, DMP_yaw, motor_speed))
 
+    # 그래프를 그리기 위해 전송(또는 Logging)
+    if (count > 100) and (logging == 1):
         rec.msg_send(msg, data)
-        
+         # 메시지 전송 후 초기화
+        data = []
+
+    if count > 100:
+        new = time.time()
         print("Elapsed time(100) =", new - past)
         past = new
-
-        # 메시지 전송 후 초기화
-        data = []
         count = 0
+
+    # todo: PID에서 Sampling Rate에 따라 기다리는지 확인
+    #       현재 Sampling Rate는 0.01임
+
+    time.sleep(0.01)
 
 # GPIO 종료
 GPIO.cleanup()

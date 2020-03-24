@@ -43,9 +43,9 @@ class Angle_MPU6050:
     # Thread 시작
     def start_measure_thread(self):
         angleThread1 = threading.Thread(target=self.measureAngles)
-        angleThread2 = threading.Thread(target=self.measureAngles_DMP)
+        # angleThread2 = threading.Thread(target=self.measureAngles_DMP)
         angleThread1.start()
-        angleThread2.start()
+        # angleThread2.start()
 
 
     # MPU-6050 초기화
@@ -97,14 +97,16 @@ class Angle_MPU6050:
 
         # print(accX,accY,accZ)
         # print(math.sqrt((accY**2)+(accZ**2)))
-        # todo: 이건 뭐지?
-        #       accel을 이용한 roll pitch도 아니고...
-        #       y_radians = math.atan2(AcX, math.sqrt((AcY*AcY) + (AcZ*AcZ)))
-        #       x_radians = math.atan2(AcY, math.sqrt((AcX*AcX) + (AcZ*AcZ)))
-        #       roll = math.degrees(x_radians), pitch = -math.degree(y_radians)
-        if (RestrictPitch):
-            roll = math.degrees(math.atan2(accY, accZ))
-            pitch = math.degrees(math.atan(-accX / math.sqrt((accY ** 2) + (accZ ** 2))))
+        if (RestrictPitch):  # default가 True, 사실 이게 뭔지 모르겠다
+            # https://github.com/rocheparadox/Kalman-Filter-Python-for-mpu6050의 값
+            # roll = math.degrees(math.atan2(accY, accZ))
+            # pitch = math.degrees(math.atan(-accX / math.sqrt((accY ** 2) + (accZ ** 2))))
+
+            # https://blog.naver.com/codingbird/221766900497에서 설명한 수식으로 변경 (by JHK)
+            # 단!!!, pitch의 -accX 대신 +accX를 사용(우연히..., 그런데 그게 맞네? 원인은 모르겠다)
+            roll = math.degrees(math.atan2(accY, math.sqrt((accX * accX) + (accZ * accZ))))
+            # todo:
+            pitch = math.degrees(math.atan2(-accX, math.sqrt((accY * accY) + (accZ * accZ))))
         else:
             roll = math.atan(accY / math.sqrt((accX ** 2) + (accZ ** 2))) * radToDeg
             pitch = math.atan2(-accX, accZ) * radToDeg
@@ -148,26 +150,34 @@ class Angle_MPU6050:
                 timer = time.time()
 
                 #3) Accel을 이용한 Roll/Pitch 계산 같은데...
-                # todo: 이건 뭐지?
-                #       RestrictPitch
-                if (RestrictPitch):
-                    roll = math.degrees(math.atan2(accY, accZ))
-                    pitch = math.degrees(math.atan(-accX / math.sqrt((accY ** 2) + (accZ ** 2))))
+                # todo: RestrictedPitch가 뭐지?
+                if (RestrictPitch):  # default가 True, 사실 이게 뭔지 모르겠다
+                    # https://github.com/rocheparadox/Kalman-Filter-Python-for-mpu6050의 값
+                    # roll = math.degrees(math.atan2(accY, accZ))
+                    # pitch = math.degrees(math.atan(-accX / math.sqrt((accY ** 2) + (accZ ** 2))))
+
+                    # https://blog.naver.com/codingbird/221766900497에서 설명한 수식으로 변경 (by JHK)
+                    # 단!!!, pitch의 -accX 대신 +accX를 사용(우연히..., 그런데 그게 맞네? 원인은 모르겠다)
+                    # if (abs(kalAngleY) > 90 or True):
+                    #     gyroYRate = -gyroYRate <- 이거 때문인듯.
+                    roll = math.degrees(math.atan2(accY, math.sqrt((accX * accX) + (accZ * accZ))))
+                    # todo:
+                    pitch = math.degrees(math.atan2(-accX, math.sqrt((accY * accY) + (accZ * accZ))))
                 else:
                     roll = math.atan(accY / math.sqrt((accX ** 2) + (accZ ** 2))) * radToDeg
                     pitch = math.atan2(-accX, accZ) * radToDeg
 
                 # 3-1) Accel을 이용한 roll/pitch
-                self.accel_roll = math.degrees(math.atan2(accX, math.sqrt((accY * accY) + (accZ * accZ))))
-                self.accel_pitch = math.degrees(math.atan2(accY, math.sqrt((accX*accX) + (accZ*accZ))))
+                self.accel_pitch = pitch
+                self.accel_roll = roll
 
                 # by JHK
-                # todo: to be checked
-                #       131은 Gyro의 FS이 0일때의 Scale Factor인데...
-                #       현재 Gyro의 FS은 3이다.
-                #       이때의 FS은 16.4!!! 그런데... Datasheet를 믿을수가 없다.
                 # gyroXRate = gyroX / 131
                 # gyroYRate = gyroY / 131
+                # gyroZRate = gyroZ / 131
+
+                # 131은 Gyro의 FS이 0일때의 Scale Factor이다.
+                # 현재 Gyro의 FS은 3이고 이때의 Scale Factor는 16.4이다.
                 gyroXRate = gyroX / 16.4
                 gyroYRate = gyroY / 16.4
                 gyroZRate = gyroZ / 16.4
@@ -183,7 +193,7 @@ class Angle_MPU6050:
 
                     # 뭐야 이건...
                     if (abs(kalAngleY) > 90 or True):
-                        gyroYRate = -gyroYRate
+                        # gyroYRate = -gyroYRate  # by JHK: 왜???
                         kalAngleY = kalmanY.getAngle(pitch, gyroYRate, dt)
                 else:
                     if ((pitch < -90 and kalAngleY > 90) or (pitch > 90 and kalAngleY < -90)):
@@ -227,6 +237,38 @@ class Angle_MPU6050:
                 self.kalman_roll = kalAngleX
                 self.compl_pitch = compAngleY
                 self.compl_roll = compAngleX
+
+                ####################################################
+                # DMP를 이용한 센서값 읽기
+                # 생각해보니... 굳이 Thread를 두개 돌릴 필요가 없다.
+                ####################################################
+                # 읽을 센서값이 있는지 확인(Int Status와 fifo count를 확인)
+                mpuIntStatus = self.mpu.getIntStatus()
+                fifoCount = self.mpu.getFIFOCount()
+
+                # Overflow 확인
+                # this should never happen unless our code is too inefficient
+                if (fifoCount == 1024) or (mpuIntStatus & 0x10):
+                    # reset so we can continue cleanly
+                    self.mpu.resetFIFO()
+                    print('FIFO overflow!', fifoCount, hex(mpuIntStatus))
+
+                # 읽을 데이터가 있을 때 까지 대기
+                fifoCount = self.mpu.getFIFOCount()
+                while fifoCount < self.packetSize:
+                    fifoCount = self.mpu.getFIFOCount()
+
+                # 수신 데이터가 있는 경우
+                result = self.mpu.getFIFOBytes(self.packetSize)
+                quaternion = self.mpu.dmpGetQuaternion(result)
+                gravity = self.mpu.dmpGetGravity(quaternion)
+                ypr = self.mpu.dmpGetYawPitchRoll(quaternion, gravity)
+
+                # DMP를 이용해 계산한 각도
+                self.DMP_roll = math.degrees(ypr['roll'])
+                self.DMP_pitch = math.degrees(ypr['pitch'])
+                self.DMP_yaw = math.degrees(ypr['yaw'])
+
                 time.sleep(0.005)
 
             except Exception as exc:
@@ -310,7 +352,10 @@ class Angle_MPU6050:
         return self.accel_roll
 
     def get_accel_pitch(self):
-        return self.accel_pitch
+        # by JHK
+        # Accel의 return값이 DMP, Kalman값과 방향이 다르다.
+        # 일단은 accel, Kalman에 맞춰 뒤집자
+        return -self.accel_pitch
 
     def get_gyro_roll(self):
         return self.gyro_roll

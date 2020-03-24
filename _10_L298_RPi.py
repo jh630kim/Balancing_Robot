@@ -63,14 +63,14 @@ def set_L298_Control(PWM, INA, INB, speed):
     # 앞으로
     if speed > 0:
         PWM.ChangeDutyCycle(speed)
-        GPIO.output(INA, GPIO.LOW)
-        GPIO.output(INB, GPIO.HIGH)
+        GPIO.output(INA, GPIO.HIGH)
+        GPIO.output(INB, GPIO.LOW)
 
     # 뒤로
     elif speed < 0:
         PWM.ChangeDutyCycle(-speed)
-        GPIO.output(INA, GPIO.HIGH)
-        GPIO.output(INB, GPIO.LOW)
+        GPIO.output(INA, GPIO.LOW)
+        GPIO.output(INB, GPIO.HIGH)
 
     # 정지
     elif speed == 0:
