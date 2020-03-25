@@ -23,22 +23,22 @@ from simple_pid import PID
 
 
 ########################################
-# PID 초기화
+# 설정값을 인수로 받기
 ########################################
-# todo: 로봇에 맞게 튜닝 필요
 # Config파일에서 PID 설정값 읽기
 file = open("_01_config.py", 'r')
-setpoint = float(file.readline().split("#")[0])       # 로봇이 지면에서 평형을 유지하는 상태의 값
-Kp = float(file.readline().split("#")[0])             # P gain, 1단계 설정
-Ki = float(file.readline().split("#")[0])            # I gain, 3단계 설정
-Kd = float(file.readline().split("#")[0])            # D gain, 2단계 설정
-run = int(file.readline().split("#")[0])            # 모터 구동 여부
-logging = int(file.readline().split("#")[0])        # data logging 여부
+setpoint = float(file.readline().split("=")[1])       # 로봇이 지면에서 평형을 유지하는 상태의 값
+Kp = float(file.readline().split("=")[1])             # P gain, 1단계 설정
+Ki = float(file.readline().split("=")[1])            # I gain, 3단계 설정
+Kd = float(file.readline().split("=")[1])            # D gain, 2단계 설정
+run = int(file.readline().split("=")[1])            # 모터 구동 여부
+logging = int(file.readline().split("=")[1])        # data logging 여부
 file.close()
 
 # 파일 실행 인자로 설정값 받기
 try:
-    if sys.argv[1] != '-':
+    # if str(type(sys.argv[1])) != "<class 'str'>":
+    if sys.argv[1] != '-' and sys.argv[1] != 'r':
         setpoint = float(sys.argv[1])
 except IndexError:
     print("Set (1)setpoint, (1)Kp, (3)Ki, (4)Kd, (5)motor_run[1], (6)logging[0] status!")
@@ -63,14 +63,17 @@ except IndexError:
 
 # Config파일에 PID 설정값 쓰기
 file = open("_01_config.py", 'w')
-file.write("{}      # set_point\n".format(setpoint))
-file.write("{}      # P gain\n".format(Kp))
-file.write("{}      # I gain\n".format(Ki))
-file.write("{}      # D gain\n".format(Kd))
-file.write("{}      # motor on = 1, off = 0\n".format(run))
-file.write("{}      # data logging on `= 1, off = 0\n".format(logging))
+file.write("# set_point                 = {}\n".format(setpoint))
+file.write("# P gain                    = {}\n".format(Kp))
+file.write("# I gain                    = {}\n".format(Ki))
+file.write("# D gain                    = {}\n".format(Kd))
+file.write("# motor ON(1)/OFF(0)        = {}\n".format(run))
+file.write("# Data logging ON(1)/OFF(0) = {}\n".format(logging))
 file.close()
 
+########################################
+# PID 초기화
+########################################
 # 기타 설정값
 sample_time = 0.01  # 주기: 0.05 sec
 output_limits = (-99, 99)   # 출력 제한: -100 ~ 100
@@ -111,7 +114,7 @@ mpu6050.start_measure_thread()
 L298.GPIO_init()
 
 ########################################
-# Client Socket 초기화
+# Logging 준비
 ########################################
 # 전송 센서 정보
 if logging == 1:
@@ -137,7 +140,7 @@ if logging == 1:
 ########################################
 # 제어 루프 시작
 ########################################
-print("Kp = {}, Ki = {}, Kd = {}".format(Kp, Ki, Kd))
+print("SP = {}, Kp = {}, Ki = {}, Kd = {}, Run = {}, Log = {}".format(setpoint, Kp, Ki, Kd, run, logging))
 
 for i in range(3, 0, -1):
     print(i, "!")
@@ -148,6 +151,24 @@ print("Start!!!")
 # 초기값 설정
 count = 0           # display 주기
 past = time.time()  # 현재 시간(Loop time 확인용)
+
+##################################
+# 정지상태의 Gyro 센서 보정
+##################################
+# todo: 크게 중용하지 않아 보인다.
+#       나중에 밸런싱이 잘 맞으면 그때 생각하자.
+#       지금은 약 -0.006, 0.02 deg로 보이는데... 짧은 시간에는 영향 없다.
+'''
+gyro_pitch_sum = 0
+gyro_yaw_sum = 0
+for i in range(500):
+    gyro_pitch_sum += mpu6050.get_gyro_pitch()
+    gyro_yaw_sum += mpu6050.get_gyro_yaw()
+    time.sleep(0.005)
+
+gyro_pitch_cal = gyro_pitch_sum/500
+gyro_yaw_cal = gyro_yaw_sum/500
+'''
 
 while True:
     # 센서 읽기
@@ -188,16 +209,15 @@ while True:
         # 메시지 생성 for logging
         data.append(value.format(kalman_pitch, -kalman_pitch, DMP_pitch, accel_pitch, gyro_pitch,
                                  gyro_yaw, DMP_yaw, motor_speed))
-
-    # 그래프를 그리기 위해 전송(또는 Logging)
-    if (count > 100) and (logging == 1):
-        rec.msg_send(msg, data)
-         # 메시지 전송 후 초기화
-        data = []
+        # 그래프를 그리기 위해 전송(또는 Logging)
+        if count > 100:
+            rec.msg_send(msg, data)
+             # 메시지 전송 후 초기화
+            data = []
 
     if count > 100:
         new = time.time()
-        print("Elapsed time(100) =", new - past)
+        print("Elapsed time(for 100 tries) =", new - past)
         past = new
         count = 0
 
