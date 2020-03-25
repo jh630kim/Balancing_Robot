@@ -75,6 +75,7 @@ file.close()
 # PID 초기화
 ########################################
 # 기타 설정값
+setpoint_adj = 0
 sample_time = 0.01  # 주기: 0.05 sec
 output_limits = (-99, 99)   # 출력 제한: -100 ~ 100
 auto_mode = True    # PID control ON(True), Off(False)
@@ -119,7 +120,7 @@ L298.GPIO_init()
 # 전송 센서 정보
 if logging == 1:
     sensor_name = ["Kalman_Y", "Kalman_Y(Inv)", "DMP_Y", "ACCEL_Y", "Y",
-                   "Gyro_yaw", "DMP_Y", "MOTOR"]
+                   "Gyro_yaw", "DMP_Y", "MOTOR", "ADJ"]
     channel = len(sensor_name)
 
     # Data 메시지 준비
@@ -155,7 +156,7 @@ past = time.time()  # 현재 시간(Loop time 확인용)
 ##################################
 # 정지상태의 Gyro 센서 보정
 ##################################
-# todo: 크게 중용하지 않아 보인다.
+# todo: 크게 중요하지 않아 보인다.
 #       나중에 밸런싱이 잘 맞으면 그때 생각하자.
 #       지금은 약 -0.006, 0.02 deg로 보이는데... 짧은 시간에는 영향 없다.
 '''
@@ -188,6 +189,16 @@ while True:
     # current_angle = 현재 Y 각도(pitch)
     # motor_speed: 모터의 전/후진
     motor_speed = pid(current_angle)
+
+    adj_value = 0.01      # 0.015
+    # 정지상태의 Setpoint 조정
+    if motor_speed < 0:
+        setpoint_adj -= adj_value
+    elif motor_speed > 0:
+        setpoint_adj += adj_value
+
+    pid.setpoint = setpoint + setpoint_adj
+
     if run == 1:
         # todo: 모터 출력이 선형적인지 확인
         #       스텝모터면 편한데... 다른 프로젝트에서는 Encoder로 회전수를 확인하기도 했다.
@@ -208,7 +219,7 @@ while True:
     if logging == 1:
         # 메시지 생성 for logging
         data.append(value.format(kalman_pitch, -kalman_pitch, DMP_pitch, accel_pitch, gyro_pitch,
-                                 gyro_yaw, DMP_yaw, motor_speed))
+                                 gyro_yaw, DMP_yaw, motor_speed, setpoint_adj))
         # 그래프를 그리기 위해 전송(또는 Logging)
         if count > 100:
             rec.msg_send(msg, data)
