@@ -10,9 +10,9 @@
 import _10_L298_RPi as L298
 from _21_MPU_Thread import Angle_MPU6050
 # Sensor_Visualizer_v2를 이용해 Display하고 싶으면 이걸 이용
-# import _41_LAN_Comm as rec
+import _41_LAN_Comm as rec
 # 단순히 파일로 기록하고 싶으면 이걸 이용
-import _41_FILE_record as rec
+# import _41_FILE_record as rec
 
 import math
 import time
@@ -76,6 +76,8 @@ file.close()
 ########################################
 # 기타 설정값
 setpoint_adj = 0
+# todo: Sampling Time 조절, zippy 코드를 보니 5ms 이내로 하라고 한다.
+#       가장 마지막의 time.sleep()도 조정 필요
 sample_time = 0.01  # 주기: 0.05 sec
 output_limits = (-99, 99)   # 출력 제한: -100 ~ 100
 auto_mode = True    # PID control ON(True), Off(False)
@@ -119,8 +121,8 @@ L298.GPIO_init()
 ########################################
 # 전송 센서 정보
 if logging == 1:
-    sensor_name = ["Kalman_Y", "Kalman_Y(Inv)", "DMP_Y", "ACCEL_Y", "Y",
-                   "Gyro_yaw", "DMP_Y", "MOTOR", "ADJ"]
+    sensor_name = ["Kalman_Y", "SetPoint", "MOTOR", "ACCEL_Y",
+                   "Gyro_yaw", "DMP_Y", "ADJ"]
     channel = len(sensor_name)
 
     # Data 메시지 준비
@@ -134,6 +136,15 @@ if logging == 1:
         value += '{} '
         sensor_min.append(-180)
         sensor_max.append(180)
+
+    sensor_min[0] = -30
+    sensor_max[0] = 30
+
+    sensor_min[1] = -5
+    sensor_max[1] = 0
+
+    sensor_min[3] = -100
+    sensor_max[3] = 100
 
     # Clinet 초기화
     rec.initialize(channel, sensor_name, sensor_min, sensor_max)
@@ -197,7 +208,7 @@ while True:
     elif motor_speed > 0:
         setpoint_adj += adj_value
 
-    pid.setpoint = setpoint + setpoint_adj
+    # pid.setpoint = setpoint + setpoint_adj
 
     if run == 1:
         # todo: 모터 출력이 선형적인지 확인
@@ -218,8 +229,11 @@ while True:
 
     if logging == 1:
         # 메시지 생성 for logging
-        data.append(value.format(kalman_pitch, -kalman_pitch, DMP_pitch, accel_pitch, gyro_pitch,
-                                 gyro_yaw, DMP_yaw, motor_speed, setpoint_adj))
+
+        sensor_name = ["Kalman_Y", "SetPoint", "MOTOR", "ACCEL_Y",
+                       "Gyro_yaw", "DMP_Y", "ADJ"]
+        data.append(value.format(kalman_pitch, setpoint_adj, motor_speed, accel_pitch,
+                                 gyro_yaw, DMP_yaw, pid.setpoint))
         # 그래프를 그리기 위해 전송(또는 Logging)
         if count > 100:
             rec.msg_send(msg, data)
