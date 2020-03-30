@@ -1,15 +1,21 @@
 # -*- coding: utf-8 -*-
 
-import bluetooth
+# https://category.yahboom.net/products/balancecar 를 참고해서 작성
+# 홈페이지에 게시된 App을 이용하도록 작성함
+# 따라서!!! Yahboom app 의 명령을 파싱한다.
+# Document 에 앱, 프로토콜, 코드까지 다 있다.
+
+import bluetooth        # pip3 install pybluez 로 설치 필요.
 import time
 import threading
+import math
 
 
 class Comm_BT:
     # 블루투스 초기화
     def __init__(self):
-        self.server_socket = ''
-        self.client_socket = ''
+        self.server_socket = 0
+        self.client_socket = 0
         self.address = 0
         self.port = 0
         self.Kp = 0
@@ -54,7 +60,16 @@ class Comm_BT:
         data = "$$$U,9600,N"
         self.client_socket.send(data)
 
-    # Thread 시작
+    '''
+    # 소켓 연결 Thread 시작
+    def wait_client_thread(self):
+        waitThread = threading.Thread(target=self.wait_client_BT)
+        waitThread.start()
+    
+    def wait_client_BT(self):
+    '''
+
+    # 데이터 수신 Thread 시작
     def start_comm_thread(self):
         commThread = threading.Thread(target=self.data_receiving_BT)
         commThread.start()
@@ -71,82 +86,72 @@ class Comm_BT:
                 print("Parsing Error in Bluetooth Thread!!!")
                 print(temp)
             else:
-                self.command = temp
+                # 가끔 두개가 연달아 들어오는 경우가 있다. 첫번째 것만 처리
+                # 첫 문자 $를 빼고 데이터만 전송
+                self.command = temp.split('#')[0][1:]
                 self.newline = True
                 # print(self.command)
             time.sleep(0.01)
 
     # 명령 파싱
-    # Yahboom app 의 명령을 파싱한다.
-    # https://category.yahboom.net/products/balancecar 참고
-    # Document 에 앱, 프로토콜, 코드까지 다 있다.
     def parsing(self, command, Kp=0, Kd=0, Kp2=0, Ki2=0):
         # parsing 시작
-        command = command[1:-1]
         cmd_list = command.split(',')
 
         # 1st byte : 전/후/좌/우/정지 명령
         try:
-            car_state = bt.car_cmd0[cmd_list[0]]
-            print(car_state)
+            car_state = self.car_cmd0[cmd_list[0]]
+            # print(car_state)
         except KeyError:
-            car_state = bt.car_cmd0['0']
-            print("error1", car_state)
+            car_state = self.car_cmd0['0']
+            # print("error1", car_state)
 
         # 2nd byte : 좌/우 회전
         if cmd_list[1] != '0':
             try:
-                car_state = bt.car_cmd1[cmd_list[1]]
-                print(car_state)
+                car_state = self.car_cmd1[cmd_list[1]]
+                # print(car_state)
             except KeyError:
-                car_state = bt.car_cmd1['0']
-                print("error2", car_state)
+                car_state = self.car_cmd1['0']
+                # print("error2", car_state)
 
-        # 3rd byte : PID 계수 읽기
+        # 3rd byte : PID 계수 전송
         if cmd_list[2] == '1':
             return_data = "$0,0,0,0,0,0,AP{},AD{},VP{},VI{}#".format(Kp, Kd, Kp2, Ki2)
             print(return_data)
             self.client_socket.send(return_data)
+        # 3rd byte : PID 계수 초기화
         elif cmd_list[2] == '2':
             self.reset_pid = True
-            print(self.reset_pid)
+            # print(self.reset_pid)
             return_data = "$OK#"
             self.client_socket.send(return_data)
 
         # 4th byte : 데이터 자동 전송
         if cmd_list[3] == '1':
             self.auto_up = True
-            print(self.auto_up)
+            # print(self.auto_up)
             return_data = "$OK#"
             self.client_socket.send(return_data)
         elif cmd_list[3] == '2':
             self.auto_up = False
-            print(self.auto_up)
+            # print(self.auto_up)
             return_data = "$OK#"
             self.client_socket.send(return_data)
 
         # 5th byte : Angle PID update
-        if cmd_list[4] == '1':
+        # 6th byte : Speed PID update
+        if (cmd_list[4] == '1') or (cmd_list[5] == '1'):
             self.Kp = float(cmd_list[6][2:])
             self.Kd = float(cmd_list[7][2:])
-            self.Kp2 = Kp2
-            self.Ki2 = Ki2
-            self.set_pid = True
-            # print(self.Kp, self.Kd)
-            return_data = "$OK#"
-            self.client_socket.send(return_data)
-
-        # 6th byte : Speed PID update
-        if cmd_list[5] == '1':
-            self.Kp = Kp
-            self.Kd = Kd
             self.Kp2 = float(cmd_list[8][2:])
             self.Ki2 = float(cmd_list[9][2:])
             self.set_pid = True
-            # print(self.Kp2, self.Ki2)
+            # print(self.Kp, self.Kd, self.Kp2, self.Ki2)
             return_data = "$OK#"
             self.client_socket.send(return_data)
-        return car_state, Kp, Kd, Kp2, Ki2
+
+        return car_state
 
     # 주의!!!!
     # Accel_Angle, Gyro_Angle, Battery 만 표기되는 것 같다.
@@ -158,7 +163,7 @@ class Comm_BT:
         return_data = msg.format(left_speed, right_speed,
                                  Accel_Angle, Gyro_Angle,
                                  CSB, Battery)
-        print(return_data)
+        # print(return_data)
         self.client_socket.send(return_data)
 
     # 새로운 명령이 있는지 확인 및 초기화
@@ -182,7 +187,7 @@ class Comm_BT:
         self.reset_pid = False
 
     # PID 값을 재설정 할 것인가?
-    def get_set_pid(self):
+    def get_new_pid(self):
         return self.set_pid, self.Kp, self.Kd, self.Kp2, self.Ki2
 
     def clear_set_pid(self):
@@ -197,18 +202,16 @@ if __name__ == '__main__':
     bt = Comm_BT()
     bt.start_comm_thread()
 
-    Kp = 0
-    Kd = 0
-    Kp2 = 0
-    Ki2 = 0
+    Kp, Kd, Kp2, Ki2 = (1.1, 2.2, 3.3, 4.4)
 
     while True:
         # Example1) 새로운 명령이 있는지 확인 후 파싱
         status, command = bt.get_command()
         if status:
-            # print(command)
+            print("command = ", command)
             # 전/후/좌/우/좌턴/우턴/정지 명령, PID 계수 확인
-            car_state, Kp, Kd, Kp2, Ki2 = bt.parsing(command, Kp, Kd, Kp2, Ki2)
+            car_state = bt.parsing(command, Kp, Kd, Kp2, Ki2)
+            print("CarState = ", car_state)
             bt.clear_command()
 
         # Example2) BT로 송신할 상태 명령, 현재는 3개만 Display된다.
@@ -217,24 +220,23 @@ if __name__ == '__main__':
         C = 0   # Battery
         auto_up = bt.get_auto_up()
         if auto_up:
+            A = math.sin(time.time()) * 10      # display할 때 x 10이 된다.
+            B = math.cos(time.time()) * 10      # display할 때 x 10이 된다.
+            C = math.sin(time.time()) * 100     # display할 때 x 1이 된다.
             bt.auto_update(A, B, C)
 
         # Example3) PID값 초기화
         reset_pid = bt.get_reset_pid()
         if reset_pid:
-            Kp = 0
-            Kd = 0
-            Kp2 = 0
-            Ki2 = 0
+            Kp, Kd, Kp2, Ki2 = (1.1, 2.2, 3.3, 4.4)
+            print("Kp, Kd, Kp2, Ki2 =", Kp, Kd, Kp2, Ki2)
             bt.clear_reset_pid()
 
         # Example4) PID값 재설정
-        reset_pid, _Kp, _Kd, _Kp2, _Ki2 = bt.get_set_pid()
-        if reset_pid:
-            Kp = _Kp
-            Kd = _Kd
-            Kp2 = _Kp2
-            Ki2 = _Ki2
+        set_pid, _Kp, _Kd, _Kp2, _Ki2 = bt.get_new_pid()
+        if set_pid:
+            Kp, Kd, Kp2, Ki2 = (_Kp, _Kd, _Kp2, _Ki2)
+            print("Kp, Kd, Kp2, Ki2 =", Kp, Kd, Kp2, Ki2)
             bt.clear_set_pid()
 
         time.sleep(0.01)
