@@ -1,4 +1,6 @@
 *.txt
 *.xlsx
 *.ino
-__pycache__/
+/_참고) Yahboom/
+/__pycache__/
+/graph/
