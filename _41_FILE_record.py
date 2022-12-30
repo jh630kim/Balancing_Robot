@@ -1,6 +1,6 @@
 import time
 
-file_name = './sensor_' + str(int(time.time())) + '.txt'
+file_name = './sensor_' + str(int(time.time())) + '.csv'
 
 def initialize(channel, sensor_name, sensor_min, sensor_max):
     file=open(file_name, 'w')

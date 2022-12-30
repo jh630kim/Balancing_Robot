@@ -6,6 +6,8 @@
 # PID는 아래 코드 이용
 # https://pypi.org/project/simple-pid/
 # BT는 Yahboom 코드를 참고해서 수정
+
+# Zumi용 코드로 수정
 """
 
 import _10_L298_RPi as L298
@@ -90,6 +92,7 @@ auto_mode = True    # PID control ON(True), Off(False)
 p_ON_M = False      # 뭐지?
 
 # PID 제어기 선언
+# todo: Zumi에도 PID 제어기가 있는 것 같다.
 pid = PID(Kp=Default_Kp, Ki=Default_Ki, Kd=Default_Kd,
           setpoint=Default_SP,
           sample_time=sample_time,
@@ -114,6 +117,7 @@ file.close()
 # MOU-6050 초기화
 ########################################
 # Sensor initialization
+# todo: Zumi용으로 수정 필요
 mpu6050 = Angle_MPU6050()
 mpu6050.start_measure_thread()
 
@@ -127,13 +131,16 @@ if bluetooth == 1:
 ########################################
 # L298(모터) 초기화
 ########################################
-L298.GPIO_init()
+# todo: Zumi용으로 수정 필요
+# L298.GPIO_init()
 
 ########################################
 # Logging 준비
 ########################################
 # 전송 센서 정보
 if logging == 1:
+    # 파일 저장시에는 sensor name만 사용된다.
+    # channel, sensor_min, sensor max는 실시간 LAN 통신때만 사용한다.
     sensor_name = ["Kalman_Y", "SetPoint", "MOTOR", "ACCEL_Y",
                    "Gyro_yaw", "DMP_Y", "ADJ"]
     # sensor_name = ["curr_Kp", "curr_Kd", "curr_Ki", "curr_SP"]
@@ -150,13 +157,10 @@ if logging == 1:
         value += '{} '
         sensor_min.append(-180)
         sensor_max.append(180)
-
     sensor_min[0] = -30
     sensor_max[0] = 30
-
     sensor_min[1] = -5
     sensor_max[1] = 0
-
     sensor_min[3] = -100
     sensor_max[3] = 100
 
