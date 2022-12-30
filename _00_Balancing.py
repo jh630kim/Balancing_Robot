@@ -213,6 +213,7 @@ while True:
     gyro_yaw = mpu6050.get_gyro_yaw()
     DMP_yaw = mpu6050.get_DMP_yaw()
 
+    print(kalman_pitch, DMP_yaw)
     ##################################
     # Bluetooth 명령
     ##################################
