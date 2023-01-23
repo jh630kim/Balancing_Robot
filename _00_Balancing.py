@@ -23,8 +23,10 @@ import time
 import sys
 import datetime
 
+from zumi.zumi import Zumi
 from simple_pid import PID
 
+zumi = Zumi()
 
 ########################################
 # 설정값을 인수로 받기
@@ -141,9 +143,11 @@ if bluetooth == 1:
 if logging == 1:
     # 파일 저장시에는 sensor name만 사용된다.
     # channel, sensor_min, sensor max는 실시간 LAN 통신때만 사용한다.
-    sensor_name = ["Kalman_Y", "SetPoint", "MOTOR", "ACCEL_Y",
+    # sensor_name = ["Kalman_Y", "SetPoint", "MOTOR", "ACCEL_Y",
                    "Gyro_yaw", "DMP_Y", "ADJ"]
-    # sensor_name = ["curr_Kp", "curr_Kd", "curr_Ki", "curr_SP"]
+    sensor_name = ["kalman_pitch", "Comp_pitch", "DMP_pitch", "accel_pitch",
+                    "gyro_pitch", "zumi_x_angle"]
+    
     channel = len(sensor_name)
 
     # Data 메시지 준비
@@ -217,6 +221,28 @@ while True:
     gyro_yaw = mpu6050.get_gyro_yaw()
     DMP_yaw = mpu6050.get_DMP_yaw()
 
+    zumi_x_angle = zumi.read_x_angle()
+
+    count += 1
+
+    if logging == 1:
+        # 메시지 생성 for logging
+        data.append(value.format(kalman_pitch, Comp_pitch, DMP_pitch, accel_pitch,
+                                 gyro_pitch, zumi_x_angle))
+
+        # 그래프를 그리기 위해 전송(또는 Logging)
+        if count > 100:
+            rec.msg_send(msg, data)
+            # 메시지 전송 후 초기화
+            data = []
+
+    if count > 100:
+        new = time.time()
+        print("Elapsed time(for 100 tries) =", new - past)
+        past = new
+        count = 0
+
+    '''
     ##################################
     # Bluetooth 명령
     ##################################
@@ -277,25 +303,7 @@ while True:
         # todo: 모터 출력이 선형적인지 확인
         #       스텝모터면 편한데... 다른 프로젝트에서는 Encoder로 회전수를 확인하기도 했다.
         L298.motor(motor_speed)
-
-    count += 1
-
-    if logging == 1:
-        # 메시지 생성 for logging
-        data.append(value.format(kalman_pitch, setpoint_adj, motor_speed, accel_pitch,
-                                 gyro_yaw, DMP_yaw, pid.setpoint))
-
-        # 그래프를 그리기 위해 전송(또는 Logging)
-        if count > 100:
-            rec.msg_send(msg, data)
-             # 메시지 전송 후 초기화
-            data = []
-
-    if count > 100:
-        new = time.time()
-        print("Elapsed time(for 100 tries) =", new - past)
-        past = new
-        count = 0
+    '''
 
     # todo: PID에서 Sampling Rate에 따라 기다리는지 확인
     #       현재 Sampling Rate는 0.01임
